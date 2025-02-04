@@ -283,6 +283,66 @@ async function run() {
       const result = await paymentCollection.find(query).toArray();
       res.send(result);
     })
+    
+
+
+    app.get('/order-stats', async (req, res) => {
+      const result = await paymentCollection.aggregate([
+
+        {
+          $unwind: '$menuId'
+        },
+        {
+          $lookup:{
+            from: 'menu',
+            localField: 'menuId',
+            foreignField: '_id',
+            as: 'menuItems'
+          }
+        },
+        {
+          $unwind: '$menuItems'
+        },
+        {
+          $group: {
+            _id: '$menuItems.category',
+            quantity: {$sum: 1}
+          }
+        }
+      ]).toArray()
+      
+      res.send(result)
+    })
+
+    // States and Analytics
+    app.get("/admin-stats", async (req, res) => {
+      const users = await userCollection.estimatedDocumentCount();
+      const menuItems = await menuCollection.estimatedDocumentCount();
+      const orders = await paymentCollection.estimatedDocumentCount();
+      
+      // this is not best way 
+      // const payments = await paymentCollection.find().toArray();
+      // const revenue = payments.reduce( (total, payment)=> total + payment.price , 0)
+
+      const result = await paymentCollection.aggregate([
+        {
+          $group: {
+            _id: null,
+            totalRevenue: {
+              $sum: '$price'
+            }
+          }
+        }
+      ]).toArray();
+      const revenue = result.length > 0 ? result[0].totalRevenue : 0;
+
+      res.send({
+        users,
+        menuItems,
+        orders,
+        revenue
+      })
+    })
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
